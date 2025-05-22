@@ -1,9 +1,8 @@
-# app/main.py
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils import load_data, plot_comparison
+from utils import load_data
 
 # Configure page
 st.set_page_config(
@@ -13,74 +12,83 @@ st.set_page_config(
 )
 
 # Title and description
-st.title("Ìºç West Africa Solar Potential Analysis")
+st.title("Ìºç West Africa Solar Potential Dashboard")
 st.markdown("""
-Compare solar irradiation metrics across Benin, Sierra Leone, and Togo
+Interactive visualization of solar irradiation metrics across countries
 """)
+
+# Load data
+@st.cache_data
+def get_data():
+    return load_data()
+
+df = get_data()
 
 # Sidebar controls
 with st.sidebar:
-    st.header("Controls")
-    countries = st.multiselect(
+    st.header("Filters")
+    selected_countries = st.multiselect(
         "Select Countries",
-        ["Benin", "Sierra Leone", "Togo"],
-        default=["Benin", "Sierra Leone", "Togo"]
+        df['Country'].unique(),
+        default=df['Country'].unique()
     )
-    metrics = st.selectbox(
+    metric = st.selectbox(
         "Primary Metric",
-        ["GHI", "DNI", "DHI"]
+        ["GHI", "DNI", "DHI"],
+        index=0
     )
-    show_stats = st.checkbox("Show Summary Statistics", True)
+    show_table = st.checkbox("Show Top Regions", True)
+
+# Filter data
+filtered_df = df[df['Country'].isin(selected_countries)]
 
 # Main content
-@st.cache_data
-def get_clean_data():
-    """Load and merge cleaned country data"""
-    return load_data()
-
-df = get_clean_data()
-filtered_df = df[df['Country'].isin(countries)]
-
-# Visualization tabs
-tab1, tab2 = st.tabs(["Comparison", "Trends"])
+tab1, tab2 = st.tabs(["Distribution Analysis", "Regional Insights"])
 
 with tab1:
-    st.header(f"{metrics} Distribution")
-    fig = plot_comparison(filtered_df, metric=metrics)
-    st.pyplot(fig)
+    st.header(f"{metric} Distribution")
     
-    if show_stats:
-        st.subheader("Summary Statistics")
-        st.dataframe(
-            filtered_df.groupby('Country')[metrics].agg(['mean', 'median', 'std']).style.background_gradient()
-        )
+    # Boxplot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.boxplot(
+        data=filtered_df,
+        x='Country',
+        y=metric,
+        hue='Country',
+        palette="viridis",
+        legend=False,
+        ax=ax
+    )
+    ax.set_title(f"{metric} Distribution by Country")
+    ax.set_ylabel(f"{metric} (W/m¬≤)")
+    st.pyplot(fig)
 
 with tab2:
-    st.header("Temporal Trends")
-    time_res = st.radio(
-        "Time Resolution",
-        ["Daily", "Monthly"],
-        horizontal=True
-    )
+    st.header("Regional Performance")
     
-    # Example time series plot
+    if show_table:
+        # Top regions table
+        st.subheader(f"Top 5 Regions by {metric}")
+        top_regions = (filtered_df.groupby(['Country', 'Region'])[metric]
+                      .mean()
+                      .sort_values(ascending=False)
+                      .head(5))
+        st.dataframe(top_regions.reset_index())
+    
+    # Time series plot
+    st.subheader("Temporal Trends")
     if not filtered_df.empty:
         fig, ax = plt.subplots(figsize=(12, 6))
         for country in filtered_df['Country'].unique():
             country_df = filtered_df[filtered_df['Country'] == country]
-            if time_res == "Monthly":
-                resampled = country_df.set_index('Timestamp').resample('M')[metrics].mean()
-            else:
-                resampled = country_df.set_index('Timestamp')[metrics]
-            resampled.plot(ax=ax, label=country)
-        
-        ax.set_ylabel(f"{metrics} (W/m¬≤)")
+            country_df.set_index('Timestamp')[metric].plot(ax=ax, label=country)
         ax.legend()
         st.pyplot(fig)
 
 # Footer
 st.divider()
-st.markdown("""
+st.markdown
+("""
 **Data Sources**: Cleaned solar irradiation datasets  
 **Metrics**:  
 - GHI: Global Horizontal Irradiance  
