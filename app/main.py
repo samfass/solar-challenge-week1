@@ -2,7 +2,18 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import sys
 from utils import load_data
+
+sys.tracebacklimit = 0  # Cleaner error messages
+
+@st.cache_data
+def get_data():
+    try:
+        return load_data()
+    except Exception as e:
+        st.error(f"Data loading failed: {str(e)}")
+        st.stop()  # Halt the app if data can't load
 
 # Configure page
 st.set_page_config(
