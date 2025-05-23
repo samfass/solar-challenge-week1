@@ -1,97 +1,68 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils import load_data
+from utils import load_country_data, process_data, get_top_regions
 
 # Configure page
 st.set_page_config(
-    page_title="Solar Potential Dashboard",
-    page_icon="‚òÄÔ∏è",
-    layout="wide"
+    page_title="West Africa Solar Potential",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Title and description
-st.title("Ìºç West Africa Solar Potential Dashboard")
+# Custom CSS for better appearance
 st.markdown("""
-Interactive visualization of solar irradiation metrics across countries
-""")
-
-# Load data
-@st.cache_data
-def get_data():
-    return load_data()
-
-df = get_data()
+<style>
+    .main {padding: 2rem;}
+    .sidebar .sidebar-content {padding: 1rem;}
+    div[data-testid="stDataFrame"] {width: 100% !important;}
+</style>
+""", unsafe_allow_html=True)
 
 # Sidebar controls
-with st.sidebar:
-    st.header("Filters")
-    selected_countries = st.multiselect(
-        "Select Countries",
-        df['Country'].unique(),
-        default=df['Country'].unique()
-    )
-    metric = st.selectbox(
-        "Primary Metric",
-        ["GHI", "DNI", "DHI"],
-        index=0
-    )
-    show_table = st.checkbox("Show Top Regions", True)
+st.sidebar.title("Dashboard Controls")
+country = st.sidebar.selectbox(
+    "Select Country",
+    ["Benin", "Sierra Leone", "Togo"],
+    index=0
+)
 
-# Filter data
-filtered_df = df[df['Country'].isin(selected_countries)]
+metric = st.sidebar.selectbox(
+    "Select Metric",
+    ["GHI", "DNI", "DHI", "Tamb"],
+    index=0
+)
 
 # Main content
-tab1, tab2 = st.tabs(["Distribution Analysis", "Regional Insights"])
+st.title(f"{country} Solar Analysis")
+st.write(f"Analyzing {metric} (Global Horizontal Irradiance)")
 
-with tab1:
-    st.header(f"{metric} Distribution")
+try:
+    # Load and process data
+    df = load_country_data(country)
+    df = process_data(df)
     
-    # Boxplot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.boxplot(
-        data=filtered_df,
-        x='Country',
-        y=metric,
-        hue='Country',
-        palette="viridis",
-        legend=False,
-        ax=ax
-    )
-    ax.set_title(f"{metric} Distribution by Country")
-    ax.set_ylabel(f"{metric} (W/m¬≤)")
-    st.pyplot(fig)
-
-with tab2:
-    st.header("Regional Performance")
+    # Visualization Section
+    col1, col2 = st.columns(2)
     
-    if show_table:
-        # Top regions table
-        st.subheader(f"Top 5 Regions by {metric}")
-        top_regions = (filtered_df.groupby(['Country', 'Region'])[metric]
-                      .mean()
-                      .sort_values(ascending=False)
-                      .head(5))
-        st.dataframe(top_regions.reset_index())
-    
-    # Time series plot
-    st.subheader("Temporal Trends")
-    if not filtered_df.empty:
-        fig, ax = plt.subplots(figsize=(12, 6))
-        for country in filtered_df['Country'].unique():
-            country_df = filtered_df[filtered_df['Country'] == country]
-            country_df.set_index('Timestamp')[metric].plot(ax=ax, label=country)
-        ax.legend()
+    with col1:
+        st.subheader(f"{metric} Distribution")
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.boxplot(data=df, y=metric, ax=ax)
         st.pyplot(fig)
-
-# Footer
-st.divider()
-st.markdown
-("""
-**Data Sources**: Cleaned solar irradiation datasets  
-**Metrics**:  
-- GHI: Global Horizontal Irradiance  
-- DNI: Direct Normal Irradiance  
-- DHI: Diffuse Horizontal Irradiance
-""")
+    
+    with col2:
+        st.subheader(f"Top 5 Regions by {metric}")
+        top_regions = get_top_regions(df)
+        st.dataframe(top_regions, hide_index=True)
+    
+    # Time Series Section
+    if 'Timestamp' in df.columns:
+        st.subheader(f"{metric} Over Time")
+        time_df = df.set_index('Timestamp').resample('D')[metric].mean()
+        st.line_chart(time_df)
+    
+except Exception as e:
+    st.error(f"Error loading data: {str(e)}")
+    st.info("Please ensure you have the cleaned data files in the data/ folder")

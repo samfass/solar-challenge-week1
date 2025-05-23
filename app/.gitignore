@@ -1,0 +1,7 @@
+# Data files
+data/*.csv
+!data/*_clean.csv
+
+# Streamlit cache
+.app/__pycache__
+*.py[cod]
