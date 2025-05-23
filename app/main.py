@@ -1,98 +1,93 @@
-# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils import load_data
-import sys
-import traceback
 
-# Configure page
+# Set page config
 st.set_page_config(
-    page_title="Solar Potential Dashboard",
-    page_icon="‚òÄÔ∏è",
+    page_title="Global Hunger Index Dashboard",
+    page_icon="Ìºç",
     layout="wide"
 )
 
-def safe_load_data():
-    """Handle data loading with error fallback"""
-    try:
-        df = load_data()
-        if df.empty:
-            st.error("No data loaded - check CSV files")
-            st.stop()
-        return df
-    except Exception as e:
-        st.error(f"Critical error: {str(e)}")
-        st.error(traceback.format_exc())
-        st.stop()
+# Title
+st.title("ÔøΩÔøΩ Global Hunger Index Dashboard")
+st.markdown("Explore Global Hunger Index (GHI) data across countries and regions")
 
-# Title and description
-st.title("Ìºç West Africa Solar Potential Dashboard")
-st.markdown("""
-Interactive visualization of solar irradiation metrics  
-*Data Sources: Benin, Sierra Leone, Togo*  
-""")
+# Sample data (in a real app, this would come from a CSV)
+@st.cache_data
+def load_data():
+    data = pd.DataFrame({
+        'Country': ['USA', 'India', 'China', 'Brazil', 'Germany', 'Nigeria', 'Ethiopia', 'Bangladesh'],
+        'Region': ['North America', 'South Asia', 'East Asia', 'South America', 'Europe', 'Africa', 'Africa', 'South Asia'],
+        'GHI': [5.2, 28.3, 9.5, 6.8, 2.5, 31.5, 29.7, 25.9],
+        'Population (M)': [331, 1408, 1425, 213, 83, 206, 115, 165]
+    })
+    return data
 
-# Load data with error handling
-df = safe_load_data()
+# Load data
+data = load_data()
 
-# Sidebar controls
-with st.sidebar:
-    st.header("Filters")
-    selected_countries = st.multiselect(
-        "Countries",
-        sorted(df['Country'].unique()),
-        default=sorted(df['Country'].unique())
-    )
-    metric = st.selectbox(
-        "Metric",
-        ["GHI", "DNI", "DHI"],
-        index=0
-    )
+# Sidebar filters
+st.sidebar.header("Filters")
+selected_region = st.sidebar.multiselect(
+    "Select regions",
+    options=data['Region'].unique(),
+    default=data['Region'].unique()
+)
 
-# Filter data
-filtered_df = df[df['Country'].isin(selected_countries)]
+selected_countries = st.sidebar.multiselect(
+    "Select countries",
+    options=data['Country'].unique(),
+    default=data['Country'].unique()
+)
 
-# Main visualization
-tab1, tab2 = st.tabs(["Distribution", "Trends"])
+# Filter data based on selections
+filtered_data = data[
+    (data['Region'].isin(selected_region)) & 
+    (data['Country'].isin(selected_countries))
+]
 
-with tab1:
-    st.header(f"{metric} Distribution")
-    try:
+# Main content
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("GHI Distribution by Country")
+    if not filtered_data.empty:
         fig, ax = plt.subplots(figsize=(10, 6))
-        sns.boxplot(
-            data=filtered_df,
-            x='Country',
-            y=metric,
-            hue='Country',
-            palette="viridis",
-            legend=False,
-            ax=ax
-        )
-        ax.set_xlabel("")
+        sns.boxplot(data=filtered_data, x='Country', y='GHI', ax=ax)
+        plt.xticks(rotation=45)
         st.pyplot(fig)
-    except Exception as e:
-        st.error(f"Plotting error: {str(e)}")
+    else:
+        st.warning("No data available for selected filters")
 
-with tab2:
-    st.header("Temporal Trends")
-    if not filtered_df.empty:
-        try:
-            fig, ax = plt.subplots(figsize=(12, 6))
-            for country in filtered_df['Country'].unique():
-                country_df = filtered_df[filtered_df['Country'] == country]
-                country_df.set_index('Timestamp')[metric].plot(ax=ax, label=country)
-            ax.legend()
-            st.pyplot(fig)
-        except Exception as e:
-            st.error(f"Time series error: {str(e)}")
+with col2:
+    st.subheader("Top Regions by GHI")
+    if not filtered_data.empty:
+        top_regions = filtered_data.groupby('Region')['GHI'].mean().sort_values(ascending=False)
+        st.dataframe(top_regions, use_container_width=True)
+    else:
+        st.warning("No data available for selected filters")
+
+# Additional visualizations
+st.subheader("GHI vs Population")
+if not filtered_data.empty:
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.scatterplot(
+        data=filtered_data,
+        x='Population (M)',
+        y='GHI',
+        hue='Region',
+        size='GHI',
+        sizes=(50, 300),
+        ax=ax
+    )
+    ax.set_xlabel("Population (Millions)")
+    ax.set_ylabel("Global Hunger Index")
+    st.pyplot(fig)
+else:
+    st.warning("No data available for selected filters")
 
 # Footer
-st.divider()
-st.markdown("""
-**Metrics**:  
-- GHI: Global Horizontal Irradiance  
-- DNI: Direct Normal Irradiance  
-- DHI: Diffuse Horizontal Irradiance  
-""")
+st.markdown("---")
+st.markdown("**Note:** This dashboard uses sample data. In a production environment, connect to your actual dataset.")
