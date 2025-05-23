@@ -1,48 +1,68 @@
 # -*- coding: utf-8 -*-
-"""
-Streamlit dashboard for solar data analysis
-"""
-
 import streamlit as st
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils import load_data
+from utils import load_country_data, process_data, get_top_regions
 
 # Configure page
-st.set_page_config(page_title="Solar Potential Dashboard", layout="wide")
+st.set_page_config(
+    page_title="West Africa Solar Potential",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Add UTF-8 encoding when reading files
-@st.cache_data
-def safe_load_data(filepath):
-    try:
-        return pd.read_csv(filepath, encoding='utf-8')
-    except UnicodeDecodeError:
-        return pd.read_csv(filepath, encoding='latin1')
+# Custom CSS for better appearance
+st.markdown("""
+<style>
+    .main {padding: 2rem;}
+    .sidebar .sidebar-content {padding: 1rem;}
+    div[data-testid="stDataFrame"] {width: 100% !important;}
+</style>
+""", unsafe_allow_html=True)
 
-# Load data
-st.sidebar.title("Configuration")
-countries = ["Benin", "Sierra Leone", "Togo"]
-selected_country = st.sidebar.selectbox("Select Country", countries)
+# Sidebar controls
+st.sidebar.title("Dashboard Controls")
+country = st.sidebar.selectbox(
+    "Select Country",
+    ["Benin", "Sierra Leone", "Togo"],
+    index=0
+)
+
+metric = st.sidebar.selectbox(
+    "Select Metric",
+    ["GHI", "DNI", "DHI", "Tamb"],
+    index=0
+)
 
 # Main content
-st.title(f"Solar Potential Analysis: {selected_country}")
+st.title(f"{country} Solar Analysis")
+st.write(f"Analyzing {metric} (Global Horizontal Irradiance)")
 
 try:
-    df = safe_load_data(f"../data/{selected_country.lower()}_clean.csv")
+    # Load and process data
+    df = load_country_data(country)
+    df = process_data(df)
     
-    # Visualization section
-    st.header("Solar Irradiance Distribution")
-    fig, ax = plt.subplots()
-    sns.boxplot(data=df, y="GHI")
-    st.pyplot(fig)
+    # Visualization Section
+    col1, col2 = st.columns(2)
     
-    # Top regions table
-    st.header("Top Performing Regions")
-    top_regions = df.groupby("Region")["GHI"].mean().nlargest(5).reset_index()
-    st.dataframe(top_regions)
+    with col1:
+        st.subheader(f"{metric} Distribution")
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.boxplot(data=df, y=metric, ax=ax)
+        st.pyplot(fig)
     
-except FileNotFoundError:
-    st.error("Data file not found. Please ensure cleaned data exists.")
+    with col2:
+        st.subheader(f"Top 5 Regions by {metric}")
+        top_regions = get_top_regions(df)
+        st.dataframe(top_regions, hide_index=True)
+    
+    # Time Series Section
+    if 'Timestamp' in df.columns:
+        st.subheader(f"{metric} Over Time")
+        time_df = df.set_index('Timestamp').resample('D')[metric].mean()
+        st.line_chart(time_df)
+    
 except Exception as e:
-    st.error(f"An error occurred: {str(e)}")
+    st.error(f"Error loading data: {str(e)}")
+    st.info("Please ensure you have the cleaned data files in the data/ folder")
