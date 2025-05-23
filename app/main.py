@@ -1,93 +1,48 @@
+# -*- coding: utf-8 -*-
+"""
+Streamlit dashboard for solar data analysis
+"""
+
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from utils import load_data
 
-# Set page config
-st.set_page_config(
-    page_title="Global Hunger Index Dashboard",
-    page_icon="Ìºç",
-    layout="wide"
-)
+# Configure page
+st.set_page_config(page_title="Solar Potential Dashboard", layout="wide")
 
-# Title
-st.title("ÔøΩÔøΩ Global Hunger Index Dashboard")
-st.markdown("Explore Global Hunger Index (GHI) data across countries and regions")
-
-# Sample data (in a real app, this would come from a CSV)
+# Add UTF-8 encoding when reading files
 @st.cache_data
-def load_data():
-    data = pd.DataFrame({
-        'Country': ['USA', 'India', 'China', 'Brazil', 'Germany', 'Nigeria', 'Ethiopia', 'Bangladesh'],
-        'Region': ['North America', 'South Asia', 'East Asia', 'South America', 'Europe', 'Africa', 'Africa', 'South Asia'],
-        'GHI': [5.2, 28.3, 9.5, 6.8, 2.5, 31.5, 29.7, 25.9],
-        'Population (M)': [331, 1408, 1425, 213, 83, 206, 115, 165]
-    })
-    return data
+def safe_load_data(filepath):
+    try:
+        return pd.read_csv(filepath, encoding='utf-8')
+    except UnicodeDecodeError:
+        return pd.read_csv(filepath, encoding='latin1')
 
 # Load data
-data = load_data()
-
-# Sidebar filters
-st.sidebar.header("Filters")
-selected_region = st.sidebar.multiselect(
-    "Select regions",
-    options=data['Region'].unique(),
-    default=data['Region'].unique()
-)
-
-selected_countries = st.sidebar.multiselect(
-    "Select countries",
-    options=data['Country'].unique(),
-    default=data['Country'].unique()
-)
-
-# Filter data based on selections
-filtered_data = data[
-    (data['Region'].isin(selected_region)) & 
-    (data['Country'].isin(selected_countries))
-]
+st.sidebar.title("Configuration")
+countries = ["Benin", "Sierra Leone", "Togo"]
+selected_country = st.sidebar.selectbox("Select Country", countries)
 
 # Main content
-col1, col2 = st.columns(2)
+st.title(f"Solar Potential Analysis: {selected_country}")
 
-with col1:
-    st.subheader("GHI Distribution by Country")
-    if not filtered_data.empty:
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.boxplot(data=filtered_data, x='Country', y='GHI', ax=ax)
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
-    else:
-        st.warning("No data available for selected filters")
-
-with col2:
-    st.subheader("Top Regions by GHI")
-    if not filtered_data.empty:
-        top_regions = filtered_data.groupby('Region')['GHI'].mean().sort_values(ascending=False)
-        st.dataframe(top_regions, use_container_width=True)
-    else:
-        st.warning("No data available for selected filters")
-
-# Additional visualizations
-st.subheader("GHI vs Population")
-if not filtered_data.empty:
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.scatterplot(
-        data=filtered_data,
-        x='Population (M)',
-        y='GHI',
-        hue='Region',
-        size='GHI',
-        sizes=(50, 300),
-        ax=ax
-    )
-    ax.set_xlabel("Population (Millions)")
-    ax.set_ylabel("Global Hunger Index")
+try:
+    df = safe_load_data(f"../data/{selected_country.lower()}_clean.csv")
+    
+    # Visualization section
+    st.header("Solar Irradiance Distribution")
+    fig, ax = plt.subplots()
+    sns.boxplot(data=df, y="GHI")
     st.pyplot(fig)
-else:
-    st.warning("No data available for selected filters")
-
-# Footer
-st.markdown("---")
-st.markdown("**Note:** This dashboard uses sample data. In a production environment, connect to your actual dataset.")
+    
+    # Top regions table
+    st.header("Top Performing Regions")
+    top_regions = df.groupby("Region")["GHI"].mean().nlargest(5).reset_index()
+    st.dataframe(top_regions)
+    
+except FileNotFoundError:
+    st.error("Data file not found. Please ensure cleaned data exists.")
+except Exception as e:
+    st.error(f"An error occurred: {str(e)}")

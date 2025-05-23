@@ -1,27 +1,12 @@
-# app/utils.py
 import pandas as pd
 
-def load_data():
-    """Load data with encoding fallback"""
-    countries = ['benin', 'sierra_leone', 'togo']
-    dfs = []
-    
-    for country in countries:
-        try:
-            # Try multiple common encodings
-            for encoding in ['utf-8', 'latin1', 'iso-8859-1', 'cp1252']:
-                try:
-                    df = pd.read_csv(
-                        f"data/{country}_clean.csv",
-                        parse_dates=["Timestamp"],
-                        encoding=encoding
-                    )
-                    df['Country'] = country.replace('_', ' ').title()
-                    dfs.append(df)
-                    break
-                except UnicodeDecodeError:
-                    continue
-        except Exception as e:
-            print(f"Error loading {country}: {str(e)}")
-    
-    return pd.concat(dfs) if dfs else pd.DataFrame()
+def load_data(filepath):
+    try:
+        return pd.read_csv(filepath, encoding='utf-8')
+    except UnicodeDecodeError:
+        return pd.read_csv(filepath, encoding='latin1')
+
+def clean_data(df):
+    """Data cleaning pipeline"""
+    # Add your cleaning logic here
+    return df.dropna()
