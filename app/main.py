@@ -1,19 +1,11 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import sys
 from utils import load_data
-
-sys.tracebacklimit = 0  # Cleaner error messages
-
-@st.cache_data
-def get_data():
-    try:
-        return load_data()
-    except Exception as e:
-        st.error(f"Data loading failed: {str(e)}")
-        st.stop()  # Halt the app if data can't load
+import sys
+import traceback
 
 # Configure page
 st.set_page_config(
@@ -22,87 +14,85 @@ st.set_page_config(
     layout="wide"
 )
 
+def safe_load_data():
+    """Handle data loading with error fallback"""
+    try:
+        df = load_data()
+        if df.empty:
+            st.error("No data loaded - check CSV files")
+            st.stop()
+        return df
+    except Exception as e:
+        st.error(f"Critical error: {str(e)}")
+        st.error(traceback.format_exc())
+        st.stop()
+
 # Title and description
 st.title("Ìºç West Africa Solar Potential Dashboard")
 st.markdown("""
-Interactive visualization of solar irradiation metrics across countries
+Interactive visualization of solar irradiation metrics  
+*Data Sources: Benin, Sierra Leone, Togo*  
 """)
 
-# Load data
-@st.cache_data
-def get_data():
-    return load_data()
-
-df = get_data()
+# Load data with error handling
+df = safe_load_data()
 
 # Sidebar controls
 with st.sidebar:
     st.header("Filters")
     selected_countries = st.multiselect(
-        "Select Countries",
-        df['Country'].unique(),
-        default=df['Country'].unique()
+        "Countries",
+        sorted(df['Country'].unique()),
+        default=sorted(df['Country'].unique())
     )
     metric = st.selectbox(
-        "Primary Metric",
+        "Metric",
         ["GHI", "DNI", "DHI"],
         index=0
     )
-    show_table = st.checkbox("Show Top Regions", True)
 
 # Filter data
 filtered_df = df[df['Country'].isin(selected_countries)]
 
-# Main content
-tab1, tab2 = st.tabs(["Distribution Analysis", "Regional Insights"])
+# Main visualization
+tab1, tab2 = st.tabs(["Distribution", "Trends"])
 
 with tab1:
     st.header(f"{metric} Distribution")
-    
-    # Boxplot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.boxplot(
-        data=filtered_df,
-        x='Country',
-        y=metric,
-        hue='Country',
-        palette="viridis",
-        legend=False,
-        ax=ax
-    )
-    ax.set_title(f"{metric} Distribution by Country")
-    ax.set_ylabel(f"{metric} (W/m¬≤)")
-    st.pyplot(fig)
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.boxplot(
+            data=filtered_df,
+            x='Country',
+            y=metric,
+            hue='Country',
+            palette="viridis",
+            legend=False,
+            ax=ax
+        )
+        ax.set_xlabel("")
+        st.pyplot(fig)
+    except Exception as e:
+        st.error(f"Plotting error: {str(e)}")
 
 with tab2:
-    st.header("Regional Performance")
-    
-    if show_table:
-        # Top regions table
-        st.subheader(f"Top 5 Regions by {metric}")
-        top_regions = (filtered_df.groupby(['Country', 'Region'])[metric]
-                      .mean()
-                      .sort_values(ascending=False)
-                      .head(5))
-        st.dataframe(top_regions.reset_index())
-    
-    # Time series plot
-    st.subheader("Temporal Trends")
+    st.header("Temporal Trends")
     if not filtered_df.empty:
-        fig, ax = plt.subplots(figsize=(12, 6))
-        for country in filtered_df['Country'].unique():
-            country_df = filtered_df[filtered_df['Country'] == country]
-            country_df.set_index('Timestamp')[metric].plot(ax=ax, label=country)
-        ax.legend()
-        st.pyplot(fig)
+        try:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            for country in filtered_df['Country'].unique():
+                country_df = filtered_df[filtered_df['Country'] == country]
+                country_df.set_index('Timestamp')[metric].plot(ax=ax, label=country)
+            ax.legend()
+            st.pyplot(fig)
+        except Exception as e:
+            st.error(f"Time series error: {str(e)}")
 
 # Footer
 st.divider()
-st.markdown
-("""
-**Data Sources**: Cleaned solar irradiation datasets  
+st.markdown("""
 **Metrics**:  
 - GHI: Global Horizontal Irradiance  
 - DNI: Direct Normal Irradiance  
-- DHI: Diffuse Horizontal Irradiance
+- DHI: Diffuse Horizontal Irradiance  
 """)
